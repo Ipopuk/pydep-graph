@@ -8,6 +8,9 @@ from urllib.request import urlopen
 
 from .errors import RepositoryError
 
+from pathlib import Path
+from typing import Dict, Set
+
 
 class DependencySource(ABC):
     """Абстракция источника зависимостей."""
@@ -68,3 +71,44 @@ class PyPIDependencySource(DependencySource):
                 deps.append(dep_name.lower())
 
         return deps
+
+
+class TestFileDependencySource(DependencySource):
+    """
+    Источник зависимостей для тестового репозитория.
+    Формат файла:
+      A: B C
+      B: C
+      C:
+    """
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self._graph: Dict[str, Set[str]] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            raise RepositoryError(f"Файл тестового репозитория не найден: {self.path}")
+
+        graph: Dict[str, Set[str]] = {}
+
+        with self.path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" not in line:
+                    raise RepositoryError(f"Некорректная строка в тестовом файле: {line!r}")
+                name_part, deps_part = line.split(":", 1)
+                name = name_part.strip()
+                deps = [d.strip() for d in deps_part.split() if d.strip()]
+                graph.setdefault(name, set()).update(deps)
+
+                for d in deps:
+                    graph.setdefault(d, set())
+
+        self._graph = graph
+
+    def get_direct_dependencies(self, package_name: str) -> List[str]:
+        return sorted(self._graph.get(package_name, set()))
