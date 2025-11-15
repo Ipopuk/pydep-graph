@@ -5,7 +5,8 @@ import sys
 
 from .config import AppConfig
 from .errors import ConfigError, RepositoryError
-from .sources import PyPIDependencySource
+from .graph import build_graph_bfs_recursive, detect_cycles
+from .sources import PyPIDependencySource, TestFileDependencySource
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -16,7 +17,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "-p", "--package",
-        help="Имя анализируемого Python-пакета (например, 'requests').",
+        help="Имя анализируемого Python-пакета или узла графа (в тестовом режиме).",
         required=True,
     )
     parser.add_argument(
@@ -28,22 +29,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "-m", "--mode",
         choices=["pypi", "test"],
         default="pypi",
-        help="Режим работы: 'pypi' (по умолчанию) или 'test' (работа с тестовым файлом-графом).",
+        help="Режим работы: 'pypi' или 'test'.",
     )
     parser.add_argument(
         "-o", "--output-image",
         default="graph.png",
-        help="Имя файла PNG с изображением графа зависимостей (по умолчанию graph.png).",
+        help="Имя файла PNG с изображением графа зависимостей.",
     )
     parser.add_argument(
         "-f", "--filter",
         default="",
-        help="Подстрока для фильтрации пакетов по имени (игнорируются, если содержат её).",
+        help="Подстрока для фильтрации пакетов по имени.",
     )
     parser.add_argument(
         "--show-direct-deps",
         action="store_true",
-        help="(этап 2) Вывести на экран все прямые зависимости заданного пакета.",
+        help="(этап 2/3) Вывести на экран все прямые зависимости заданного пакета.",
     )
     return parser
 
@@ -65,20 +66,39 @@ def main(argv: list[str] | None = None) -> int:
     for key, value in config.as_dict().items():
         print(f"{key} = {value}")
 
-    if config.mode.value == "pypi" and args.show_direct_deps:
+    if config.mode.value == "pypi":
         source = PyPIDependencySource(config.repo)
+    else:
+        source = TestFileDependencySource(config.repo)
+
+    if args.show_direct_deps:
         try:
             deps = source.get_direct_dependencies(config.package_name)
         except RepositoryError as exc:
             print(f"[REPOSITORY ERROR] {exc}", file=sys.stderr)
             return 3
 
-        print("\n=== Direct dependencies (PyPI) ===")
+        print("\n=== Direct dependencies ===")
         if not deps:
             print("(нет прямых зависимостей)")
         else:
             for d in deps:
                 print(f"- {d}")
+
+    print("\n=== Building dependency graph (BFS + recursion) ===")
+    graph = build_graph_bfs_recursive(
+        root=config.package_name,
+        source=source,
+        filter_substring=config.filter_substring,
+    )
+
+    print(f"Всего узлов в графе: {len(graph.nodes())}")
+    if graph.ignored_packages:
+        ignored_str = ", ".join(sorted(graph.ignored_packages))
+        print(f"Игнорированы пакеты (по фильтру): {ignored_str}")
+
+    has_cycle = detect_cycles(graph)
+    print(f"Циклические зависимости: {'обнаружены' if has_cycle else 'не обнаружены'}")
 
     return 0
 
