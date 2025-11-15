@@ -1,0 +1,10 @@
+[project]
+name = "pydep-graph"
+version = "0.1.0"
+description = "CLI tool to analyse Python package dependency graph"
+authors = [{ name = "Ipopuk" }]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+depgraph = "depgraph.cli:main"
