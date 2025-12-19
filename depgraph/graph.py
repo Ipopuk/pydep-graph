@@ -84,3 +84,35 @@ def detect_cycles(graph: DependencyGraph) -> bool:
         if color[node] == "white" and dfs(node):
             return True
     return False
+
+
+def topological_load_order(graph: DependencyGraph, root: str) -> List[str]:
+    """
+    Возвращает порядок загрузки зависимостей для root:
+    - каждая зависимость загружается раньше тех, кто от неё зависит;
+    - если в подграфе root есть цикл — бросаем GraphError.
+    Реализовано через DFS с пометками (white/gray/black).
+    """
+    order: List[str] = []
+    color: Dict[str, str] = {node: "white" for node in graph.adjacency}
+
+    def dfs(node: str) -> None:
+        if color[node] == "gray":
+            raise GraphError(f"Обнаружен цикл, включающий пакет '{node}', топологический порядок невозможен.")
+        if color[node] == "black":
+            return
+
+        color[node] = "gray"
+        for neighbor in graph.adjacency.get(node, set()):
+            dfs(neighbor)
+        color[node] = "black"
+        order.append(node)
+
+    if root not in graph.adjacency:
+        raise GraphError(f"Пакет '{root}' отсутствует в графе зависимостей.")
+
+    dfs(root)
+    # order сейчас: «зависимый после зависимостей», поэтому
+    order.reverse()
+    return order
+
