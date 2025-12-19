@@ -4,8 +4,8 @@ import argparse
 import sys
 
 from .config import AppConfig
-from .errors import ConfigError, RepositoryError
-from .graph import build_graph_bfs_recursive, detect_cycles
+from .errors import ConfigError, RepositoryError, GraphError
+from .graph import build_graph_bfs_recursive, detect_cycles, topological_load_order
 from .sources import PyPIDependencySource, TestFileDependencySource
 
 
@@ -45,6 +45,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--show-direct-deps",
         action="store_true",
         help="(этап 2/3) Вывести на экран все прямые зависимости заданного пакета.",
+    )
+    parser.add_argument(
+        "--show-load-order",
+        action="store_true",
+        help="(этап 4) Показать порядок загрузки зависимостей для заданного пакета.",
     )
     return parser
 
@@ -99,6 +104,16 @@ def main(argv: list[str] | None = None) -> int:
 
     has_cycle = detect_cycles(graph)
     print(f"Циклические зависимости: {'обнаружены' if has_cycle else 'не обнаружены'}")
+
+    if args.show_load_order:
+        print("\n=== Load order (topological) ===")
+        try:
+            order = topological_load_order(graph, config.package_name)
+        except GraphError as exc:
+            print(f"[GRAPH ERROR] {exc}", file=sys.stderr)
+        else:
+            for i, name in enumerate(order, start=1):
+                print(f"{i}. {name}")
 
     return 0
 
