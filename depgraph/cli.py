@@ -51,6 +51,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="(этап 4) Показать порядок загрузки зависимостей для заданного пакета.",
     )
+    parser.add_argument(
+        "--no-visualization",
+        action="store_true",
+        help="Не генерировать Mermaid и PNG-файл (по умолчанию визуализация включена).",
+    )
+
     return parser
 
 
@@ -115,6 +121,24 @@ def main(argv: list[str] | None = None) -> int:
             for i, name in enumerate(order, start=1):
                 print(f"{i}. {name}")
 
+    # Визуализация (если не отключена)
+    if not args.no_visualization:
+        from .visualization import graph_to_mermaid, save_mermaid, render_mermaid_png
+        from .errors import VisualizationError
+
+        print("\n=== Visualization (Mermaid + PNG) ===")
+        mermaid_text = graph_to_mermaid(graph)
+
+        mermaid_file = config.output_image.with_suffix(".mmd")
+        save_mermaid(mermaid_text, mermaid_file)
+        print(f"Mermaid-диаграмма сохранена в: {mermaid_file}")
+
+        try:
+            render_mermaid_png(mermaid_file, config.output_image)
+        except VisualizationError as exc:
+            print(f"[VISUALIZATION WARNING] {exc}", file=sys.stderr)
+        else:
+            print(f"PNG с графом зависимостей сохранён в: {config.output_image}")
     return 0
 
 
